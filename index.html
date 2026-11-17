@@ -1,0 +1,1018 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<meta name="theme-color" content="#d6577f">
+<meta name="description" content="Comprimidos da Joca — acompanhamento diário de comprimidos, lembretes e histórico.">
+<title>Comprimidos da Joca</title>
+<style>
+  /* layout: single-column phone-first card stack — today's pills on top, monthly calendar below, add-pill as a slide-up sheet */
+  :root{
+    --bg:#fdf0f3; --surface:#fffafb; --surface-2:#fce3ea;
+    --ink:#3a1f29; --ink-2:#7c5560; --muted:#b98e9b;
+    --ring:#f4d6e0;
+    --accent:#d6577f; --accent-ink:#ffffff;
+    --good:#1f7a6c; --good-bg:#e7f3ee;
+    --pending:#c98500; --pending-bg:#fbf1dd;
+    --danger:#c0392b; --danger-bg:#fbe6e3;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#1c0f14; --surface:#2a161d; --surface-2:#331b23;
+      --ink:#f8e9ee; --ink-2:#d3a8b5; --muted:#8f6670;
+      --ring:#44242e;
+      --accent:#f28fb0; --accent-ink:#2a0f16;
+      --good:#3fae9a; --good-bg:#15302a;
+      --pending:#d9a13a; --pending-bg:#332a12;
+      --danger:#e08075; --danger-bg:#3a1c17;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#1c0f14; --surface:#2a161d; --surface-2:#331b23;
+    --ink:#f8e9ee; --ink-2:#d3a8b5; --muted:#8f6670;
+    --ring:#44242e;
+    --accent:#f28fb0; --accent-ink:#2a0f16;
+    --good:#3fae9a; --good-bg:#15302a;
+    --pending:#d9a13a; --pending-bg:#332a12;
+    --danger:#e08075; --danger-bg:#3a1c17;
+    color-scheme: dark;
+  }
+  *{ box-sizing: border-box; }
+  body{
+    background: var(--bg); color: var(--ink);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding-left: max(16px, env(safe-area-inset-left,0px));
+    padding-right: max(16px, env(safe-area-inset-right,0px));
+    padding-block: 20px 40px;
+    min-height: 100%;
+    overflow-x: hidden;
+  }
+
+  .egg-bg{
+    position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
+  }
+  .egg-bg span{
+    position: absolute; line-height: 1; opacity: 0.16; will-change: transform;
+  }
+
+  .wrap{ max-width: 460px; margin: 0 auto; display:flex; flex-direction:column; gap:20px; position: relative; z-index: 1; }
+
+  header{ display:flex; align-items:flex-start; justify-content:space-between; gap: 12px; }
+  header h1{
+    font-family:"Space Grotesk", Inter, sans-serif;
+    font-size: 1.4rem; margin: 0 0 2px; text-wrap: balance; display:flex; align-items:center; gap:9px;
+  }
+  .brand-logo{ width:34px; height:34px; flex:0 0 auto; }
+  header .date{ color: var(--ink-2); font-size: 0.92rem; margin: 0; text-transform: capitalize; }
+
+  .theme-toggle{
+    flex: 0 0 auto; width: 38px; height: 38px; border-radius: 12px;
+    background: var(--surface); border: 1px solid var(--ring); color: var(--ink);
+    font-size: 1rem; cursor: pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .theme-toggle:focus-visible{ outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .celebrate-toast{
+    position: fixed; left: 50%; top: max(16px, env(safe-area-inset-top,0px));
+    transform: translateX(-50%) translateY(-8px);
+    background: var(--accent); color: var(--accent-ink);
+    padding: 10px 18px; border-radius: 999px; font-weight: 600; font-size: 0.86rem;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.18); z-index: 60; opacity: 0; pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease; white-space: nowrap;
+  }
+  .celebrate-toast.show{ opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .petal{
+    position: fixed; top: -24px; pointer-events: none; z-index: 55;
+    animation-name: petal-fall; animation-timing-function: ease-in; animation-fill-mode: forwards;
+  }
+  @keyframes petal-fall{
+    0%{ transform: translateY(-24px) rotate(0deg); opacity: 1; }
+    100%{ transform: translateY(112vh) rotate(340deg); opacity: 0.15; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .petal{ animation: none; display: none; }
+  }
+
+  .pill-card{
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 18px;
+    padding: 16px; display:flex; align-items:center; gap: 14px;
+  }
+  .pill-card .meta{ flex: 1; min-width:0; }
+  .pill-card .name{ font-weight: 600; font-size: 1.05rem; margin:0 0 2px; }
+  .pill-card .time{ color: var(--ink-2); font-size: 0.86rem; font-variant-numeric: tabular-nums; }
+  .pill-card .status-text{ font-size: 0.8rem; margin-top: 4px; }
+  .status-text.taken{ color: var(--good); }
+  .status-text.pending{ color: var(--pending); }
+
+  .toggle-btn{
+    flex: 0 0 auto; border: none; border-radius: 14px; padding: 12px 16px;
+    font-family: inherit; font-weight: 600; font-size: 0.92rem; cursor: pointer;
+    display:flex; align-items:center; gap:8px; min-width: 128px; justify-content:center;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .toggle-btn.pending{ background: var(--pending-bg); color: var(--pending); }
+  .toggle-btn.taken{ background: var(--good-bg); color: var(--good); }
+  .toggle-btn:focus-visible{ outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .icon-check{ width:16px; height:16px; flex:0 0 auto; }
+
+  .edit-row{ display:flex; gap:8px; margin-top: 8px; }
+  .text-btn{
+    background: none; border: none; color: var(--ink-2); font-size: 0.78rem;
+    cursor: pointer; padding: 2px 0; font-family: inherit; text-decoration: underline;
+  }
+  .text-btn.danger{ color: var(--danger); }
+
+  .empty{
+    background: var(--surface); border: 1px dashed var(--ring); border-radius: 18px;
+    padding: 28px 20px; text-align:center; color: var(--ink-2);
+  }
+  .empty p{ margin: 0 0 14px; }
+
+  .add-btn{
+    background: var(--accent); color: var(--accent-ink); border: none; border-radius: 14px;
+    padding: 14px; font-family: inherit; font-weight: 600; font-size: 0.95rem; cursor: pointer;
+    width: 100%;
+  }
+  .add-btn:focus-visible{ outline: 2px solid var(--ink); outline-offset: 2px; }
+  .add-btn.secondary{ background: var(--surface-2); color: var(--ink); border: 1px solid var(--ring); }
+
+  section.history{
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 18px; padding: 16px;
+  }
+  section.history h2{
+    font-family:"Space Grotesk", Inter, sans-serif; font-size: 1rem; margin: 0;
+  }
+  .cal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom: 14px; gap: 8px; }
+  .cal-nav{
+    background: var(--surface-2); color: var(--ink); border: none; border-radius: 10px;
+    width: 32px; height: 32px; font-size: 1rem; cursor: pointer; flex: 0 0 auto;
+  }
+  .cal-month{ font-size: 0.92rem; font-weight: 600; text-transform: capitalize; text-align:center; flex:1; }
+
+  .cal-grid{ display:grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal-dow{ text-align:center; font-size: 0.68rem; color: var(--muted); padding-bottom: 4px; }
+  .cal-cell{
+    aspect-ratio: 1; border-radius: 9px; display:flex; align-items:center; justify-content:center;
+    font-size: 0.8rem; font-variant-numeric: tabular-nums; position: relative;
+    background: transparent; border: none; color: var(--ink); font-family: inherit; cursor: default;
+  }
+  .cal-cell.pad{ visibility: hidden; }
+  .cal-cell.future{ color: var(--muted); }
+  .cal-cell.empty-day{ color: var(--muted); }
+  .cal-cell.complete{ background: var(--good-bg); color: var(--good); font-weight:600; cursor:pointer; }
+  .cal-cell.partial{ background: var(--pending-bg); color: var(--pending); font-weight:600; cursor:pointer; }
+  .cal-cell.missed{ background: var(--danger-bg); color: var(--danger); font-weight:600; cursor:pointer; }
+  .cal-cell.in-progress{ background: var(--surface-2); color: var(--ink); cursor:pointer; }
+  .cal-cell.is-today{ box-shadow: 0 0 0 2px var(--accent) inset; }
+  .cal-cell:focus-visible{ outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .cal-legend{ display:flex; flex-wrap:wrap; gap: 12px; margin-top: 14px; font-size: 0.74rem; color: var(--ink-2); }
+  .cal-legend span{ display:inline-flex; align-items:center; gap:5px; }
+  .cal-legend i{ width:10px; height:10px; border-radius:3px; display:inline-block; }
+  .cal-legend i.complete{ background: var(--good); }
+  .cal-legend i.partial{ background: var(--pending); }
+  .cal-legend i.missed{ background: var(--danger); }
+
+  .day-detail{ display:flex; flex-direction:column; gap: 10px; }
+  .day-detail .ddrow{ display:flex; align-items:center; gap: 10px; }
+  .day-detail .ddname{ flex:1; font-size: 0.92rem; }
+  .day-detail .ddstatus{ font-size: 0.8rem; font-weight:600; }
+  .day-detail .ddstatus.taken{ color: var(--good); }
+  .day-detail .ddstatus.missed{ color: var(--danger); }
+  .day-detail img.ddthumb{ width:36px; height:36px; border-radius:8px; object-fit:cover; cursor:pointer; border:1px solid var(--ring); }
+
+  .proof-row{ display:flex; align-items:center; gap:10px; margin-top: 8px; }
+  .proof-thumb{
+    width: 44px; height: 44px; border-radius: 10px; object-fit: cover;
+    border: 1px solid var(--ring); cursor: pointer; flex: 0 0 auto;
+  }
+  .proof-missing{
+    width:44px; height:44px; border-radius:10px; border:1px dashed var(--ring);
+    flex:0 0 auto;
+  }
+
+  dialog.lightbox{
+    border:none; border-radius: 16px; padding: 0; background: var(--surface);
+    max-width: min(92vw, 420px); max-height: 80vh;
+  }
+  dialog.lightbox::backdrop{ background: rgba(0,0,0,0.55); }
+  dialog.lightbox img{ display:block; width:100%; height:auto; border-radius: 16px; }
+  dialog.lightbox .lb-close{
+    display:block; width:100%; border:none; background: var(--surface-2); color: var(--ink-2);
+    padding: 10px; font-family: inherit; font-weight:600; cursor:pointer; border-radius: 0 0 16px 16px;
+  }
+
+  dialog.sheet{
+    border: none; border-radius: 18px 18px 0 0; padding: 0; width: 100%; max-width: 460px;
+    margin: auto auto 0; background: var(--surface); color: var(--ink);
+  }
+  dialog.sheet::backdrop{ background: rgba(0,0,0,0.35); }
+  .sheet-inner{ padding: 20px; padding-bottom: max(20px, env(safe-area-inset-bottom,0px)); display:flex; flex-direction:column; gap:14px; }
+  .sheet-inner h2{ font-family:"Space Grotesk", Inter, sans-serif; margin:0; font-size: 1.1rem; }
+  .sheet-inner p.msg{ margin:0; font-size: 0.9rem; color: var(--ink-2); }
+  label{ font-size: 0.82rem; color: var(--ink-2); display:flex; flex-direction:column; gap:6px; }
+  input[type="text"], input[type="time"]{
+    font-family: inherit; font-size: 1rem; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--ring); background: var(--surface-2); color: var(--ink);
+  }
+  .sheet-actions{ display:flex; gap:10px; margin-top: 4px; }
+  .sheet-actions button{ flex:1; border-radius: 12px; border:none; padding: 12px; font-family:inherit; font-weight:600; cursor:pointer; }
+  .sheet-actions .cancel{ background: var(--surface-2); color: var(--ink-2); }
+  .sheet-actions .save{ background: var(--accent); color: var(--accent-ink); }
+  .sheet-actions .confirm-delete{ background: var(--danger); color: #ffffff; }
+
+  .note{ color: var(--muted); font-size: 0.78rem; text-align:center; }
+
+  .check-row{ flex-direction:row; align-items:center; gap:10px; font-size: 0.95rem; color: var(--ink); }
+  .check-row input{ width:20px; height:20px; accent-color: var(--accent); }
+  .hint{ margin:0; font-size:0.76rem; color: var(--muted); }
+  .reminder-fields[hidden]{ display:none; }
+  .reminder-fields{ display:flex; flex-direction:column; gap:10px; }
+  .bell{ font-size: 0.78rem; color: var(--ink-2); margin-left: 8px; font-variant-numeric: tabular-nums; }
+
+  .reminder-banner{
+    position: fixed; left: 50%; transform: translateX(-50%);
+    top: max(12px, env(safe-area-inset-top,0px)); width: min(92vw, 440px);
+    background: var(--surface); color: var(--ink); border: 1px solid var(--accent);
+    border-radius: 14px; padding: 12px 14px; z-index: 70; display:flex; align-items:center; gap:12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  }
+  .reminder-banner[hidden]{ display:none; }
+  .reminder-banner span{ flex:1; font-size:0.9rem; }
+  .reminder-banner button{
+    border:none; border-radius:10px; padding:8px 12px; font-family:inherit; font-weight:600; cursor:pointer;
+    background: var(--accent); color: var(--accent-ink);
+  }
+</style>
+</head>
+<body>
+<div class="egg-bg" id="egg-bg" aria-hidden="true"></div>
+
+<div class="celebrate-toast" id="celebrate-toast">Tudo tomado hoje! 🌸</div>
+<div class="reminder-banner" id="reminder-banner" role="alert" hidden>
+  <span id="reminder-text"></span>
+  <button type="button" id="reminder-dismiss">OK</button>
+</div>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1><img class="brand-logo" src="assets/logo.svg" alt="" aria-hidden="true"> Comprimidos da Joca</h1>
+      <p class="date" id="today-label"></p>
+    </div>
+    <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Mudar para tema escuro"></button>
+  </header>
+
+  <div id="today-list"></div>
+
+  <button class="add-btn" id="open-add">+ Adicionar comprimido</button>
+  <button class="add-btn secondary" id="add-all-calendar" hidden>📅 Criar alarmes no Calendário (todos)</button>
+
+  <section class="history" id="history-section" hidden>
+    <div class="cal-head">
+      <button type="button" class="cal-nav" id="cal-prev" aria-label="Mês anterior">‹</button>
+      <h2 class="cal-month" id="cal-month"></h2>
+      <button type="button" class="cal-nav" id="cal-next" aria-label="Mês seguinte">›</button>
+    </div>
+    <div class="cal-grid" id="cal-grid"></div>
+    <div class="cal-legend">
+      <span><i class="complete"></i>Tudo tomado</span>
+      <span><i class="partial"></i>Parcial</span>
+      <span><i class="missed"></i>Falhou</span>
+    </div>
+  </section>
+
+  <p class="note">Guardado apenas neste telemóvel/navegador.</p>
+</div>
+
+<dialog class="lightbox" id="lightbox">
+  <img id="lightbox-img" alt="Foto de prova">
+  <button type="button" class="lb-close" id="lightbox-close">Fechar</button>
+</dialog>
+
+<dialog class="sheet" id="pill-dialog">
+  <form class="sheet-inner" method="dialog" id="pill-form">
+    <h2 id="dialog-title">Adicionar comprimido</h2>
+    <label>Nome
+      <input type="text" id="pill-name" maxlength="40" required placeholder="ex: Vitamina D">
+    </label>
+    <label>Hora habitual
+      <input type="time" id="pill-time" required>
+    </label>
+    <label class="check-row">
+      <input type="checkbox" id="reminder-on">
+      Lembrete deste comprimido
+    </label>
+    <div class="reminder-fields" id="reminder-fields" hidden>
+      <label>Hora do lembrete
+        <input type="time" id="reminder-time">
+      </label>
+      <p class="hint" id="reminder-hint"></p>
+    </div>
+    <div class="sheet-actions">
+      <button type="button" class="cancel" id="cancel-btn">Cancelar</button>
+      <button type="submit" class="save">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="sheet" id="confirm-dialog">
+  <div class="sheet-inner">
+    <h2>Remover comprimido?</h2>
+    <p class="msg" id="confirm-msg"></p>
+    <div class="sheet-actions">
+      <button type="button" class="cancel" id="confirm-cancel">Cancelar</button>
+      <button type="button" class="confirm-delete" id="confirm-ok">Remover</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog class="sheet" id="day-dialog">
+  <div class="sheet-inner">
+    <h2 id="day-dialog-title"></h2>
+    <div class="day-detail" id="day-detail-list"></div>
+    <div class="sheet-actions">
+      <button type="button" class="cancel" id="day-close">Fechar</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+(function(){
+  var STORAGE_KEY = "pilulas-dani-v1";
+  var state = { pills: [], log: {} };
+
+  function load(){
+    try{
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if(raw){
+        var parsed = JSON.parse(raw);
+        if(parsed && Array.isArray(parsed.pills)) state = parsed;
+      }
+    }catch(e){ /* storage unavailable — continue with empty state */ }
+  }
+  function save(){
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+  }
+
+  function todayKey(d){
+    d = d || new Date();
+    var y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,"0"), day = String(d.getDate()).padStart(2,"0");
+    return y + "-" + m + "-" + day;
+  }
+  function keyToDate(key){
+    var parts = key.split("-").map(Number);
+    return new Date(parts[0], parts[1]-1, parts[2]);
+  }
+  function uid(){ return "p" + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+  function sortByTime(list){
+    return list.slice().sort(function(a,b){ return (a.time||"").localeCompare(b.time||""); });
+  }
+  function activePills(){
+    return sortByTime(state.pills.filter(function(p){ return !p.deleted; }));
+  }
+  // a pill "counts" for a given day if it existed that day — created on or before it,
+  // and (if later removed) not yet removed on that day
+  function pillsOnDay(key){
+    return sortByTime(state.pills.filter(function(p){
+      var created = p.createdAt || key;
+      if(created > key) return false;
+      if(p.deleted && p.deletedAt && p.deletedAt < key) return false;
+      return true;
+    }));
+  }
+
+  var checkSvg = '<svg class="icon-check" viewBox="0 0 20 20" fill="none"><path d="M4 10.5l4 4 8-9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  // decorative eggs scattered across the background — one per grid cell
+  // (with a little jitter) so none of them ever land on top of each other;
+  // purely visual, so a fresh random layout each load needs no persistence
+  (function scatterEggs(){
+    var layer = document.getElementById("egg-bg");
+    var cols = 9, rows = 14;
+    var cellW = 100 / cols, cellH = 100 / rows;
+
+    var cells = [];
+    for(var r = 0; r < rows; r++){
+      for(var c = 0; c < cols; c++) cells.push({ row: r, col: c });
+    }
+    // Fisher-Yates shuffle, then use only the first N cells
+    for(var i = cells.length - 1; i > 0; i--){
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = cells[i]; cells[i] = cells[j]; cells[j] = tmp;
+    }
+    var count = Math.min(80, cells.length);
+
+    for(var k = 0; k < count; k++){
+      var cell = cells[k];
+      var jitterX = (Math.random() - 0.5) * cellW * 0.5;
+      var jitterY = (Math.random() - 0.5) * cellH * 0.5;
+      var left = cell.col * cellW + cellW / 2 + jitterX;
+      var top = cell.row * cellH + cellH / 2 + jitterY;
+      var el = document.createElement("span");
+      el.textContent = "🥚";
+      el.style.left = left + "vw";
+      el.style.top = top + "vh";
+      el.style.fontSize = ((10 + Math.random() * 9) * 1.08) + "px";
+      el.style.transform = "translate(-50%, -50%) rotate(" + Math.round(Math.random() * 360) + "deg)";
+      layer.appendChild(el);
+    }
+  })();
+
+  // ---- light/dark toggle ----
+  var THEME_KEY = "pilulas-theme";
+  var themeBtn = document.getElementById("theme-toggle");
+
+  function getStoredTheme(){
+    try{ return localStorage.getItem(THEME_KEY); }catch(e){ return null; }
+  }
+  function systemPrefersDark(){
+    return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  }
+  function effectiveTheme(){
+    var stored = getStoredTheme();
+    if(stored === "dark" || stored === "light") return stored;
+    return systemPrefersDark() ? "dark" : "light";
+  }
+  function applyTheme(){
+    var stored = getStoredTheme();
+    if(stored === "dark" || stored === "light"){
+      document.documentElement.setAttribute("data-theme", stored);
+    }else{
+      document.documentElement.removeAttribute("data-theme");
+    }
+    var current = effectiveTheme();
+    // icon shows the mode a tap will switch TO
+    themeBtn.textContent = current === "dark" ? "☀️" : "🌙";
+    themeBtn.setAttribute("aria-label", current === "dark" ? "Mudar para tema claro" : "Mudar para tema escuro");
+  }
+  themeBtn.addEventListener("click", function(){
+    var next = effectiveTheme() === "dark" ? "light" : "dark";
+    try{ localStorage.setItem(THEME_KEY, next); }catch(e){}
+    applyTheme();
+  });
+
+  // ---- celebration when every pill for today is taken ----
+  var toastEl = document.getElementById("celebrate-toast");
+  var toastTimer = null;
+  function celebrate(){
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.classList.remove("show"); }, 2400);
+
+    var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if(reduced) return;
+
+    for(var i = 0; i < 18; i++){
+      (function(){
+        var el = document.createElement("span");
+        el.className = "petal";
+        el.textContent = "🌸";
+        el.style.left = (Math.random() * 100) + "vw";
+        el.style.fontSize = (14 + Math.random() * 14) + "px";
+        var duration = 1.8 + Math.random() * 1.3;
+        el.style.animationDuration = duration + "s";
+        el.style.animationDelay = (Math.random() * 0.35) + "s";
+        document.body.appendChild(el);
+        setTimeout(function(){ el.remove(); }, (duration + 0.35 + 0.3) * 1000);
+      })();
+    }
+  }
+
+  // downscale + compress a photo before storing it, so a handful of photos
+  // don't blow through the browser's local-storage quota
+  function processPhoto(file, callback){
+    var reader = new FileReader();
+    reader.onload = function(){
+      var img = new Image();
+      img.onload = function(){
+        var maxSide = 480;
+        var scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        var w = Math.max(1, Math.round(img.width * scale));
+        var h = Math.max(1, Math.round(img.height * scale));
+        var canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        var ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, w, h);
+        try{
+          callback(canvas.toDataURL("image/jpeg", 0.7));
+        }catch(e){ callback(null); }
+      };
+      img.onerror = function(){ callback(null); };
+      img.src = reader.result;
+    };
+    reader.onerror = function(){ callback(null); };
+    reader.readAsDataURL(file);
+  }
+
+  // one shared hidden file input, reused for whichever pill is being photographed
+  var photoInput = document.createElement("input");
+  photoInput.type = "file";
+  photoInput.accept = "image/*";
+  photoInput.capture = "environment";
+  photoInput.style.display = "none";
+  document.body.appendChild(photoInput);
+  var photoTargetPillId = null;
+
+  photoInput.addEventListener("change", function(){
+    var file = photoInput.files && photoInput.files[0];
+    photoInput.value = "";
+    if(!file || !photoTargetPillId) return;
+    processPhoto(file, function(dataUrl){
+      if(!dataUrl) return;
+      var key = todayKey();
+      if(!state.log[key]) state.log[key] = {};
+      var entry = state.log[key][photoTargetPillId];
+      if(!entry){
+        entry = { at: new Date().toTimeString().slice(0,5) };
+        state.log[key][photoTargetPillId] = entry;
+      }
+      entry.photo = dataUrl;
+      save();
+      renderAll();
+    });
+  });
+
+  var lightbox = document.getElementById("lightbox");
+  var lightboxImg = document.getElementById("lightbox-img");
+  document.getElementById("lightbox-close").addEventListener("click", function(){
+    if(typeof lightbox.close === "function") lightbox.close();
+    else lightbox.removeAttribute("open");
+  });
+  function openLightbox(src){
+    lightboxImg.src = src;
+    if(typeof lightbox.showModal === "function") lightbox.showModal();
+    else lightbox.setAttribute("open","");
+  }
+
+  function renderToday(){
+    var list = document.getElementById("today-list");
+    list.innerHTML = "";
+    var pills = activePills();
+    document.getElementById("add-all-calendar").hidden = pills.length === 0;
+    if(pills.length === 0){
+      var empty = document.createElement("div");
+      empty.className = "empty";
+      empty.innerHTML = "<p>Ainda não há comprimidos registados.<br>Adiciona o primeiro para começares a acompanhar.</p>";
+      list.appendChild(empty);
+      return;
+    }
+    var key = todayKey();
+    var todayLog = state.log[key] || {};
+
+    pills.forEach(function(pill){
+      var taken = !!todayLog[pill.id];
+      var card = document.createElement("div");
+      card.className = "pill-card";
+
+      var meta = document.createElement("div");
+      meta.className = "meta";
+      var name = document.createElement("p"); name.className = "name"; name.textContent = pill.name;
+      var time = document.createElement("p"); time.className = "time"; time.textContent = pill.time;
+      if(pill.reminder && pill.reminder.enabled){
+        var bell = document.createElement("span");
+        bell.className = "bell"; bell.textContent = "🔔 " + (pill.reminder.time || pill.time);
+        time.appendChild(bell);
+      }
+      var status = document.createElement("p");
+      status.className = "status-text " + (taken ? "taken" : "pending");
+      status.textContent = taken ? ("Tomado às " + (todayLog[pill.id].at || pill.time)) : "Ainda não tomado";
+      meta.appendChild(name); meta.appendChild(time); meta.appendChild(status);
+
+      var editRow = document.createElement("div");
+      editRow.className = "edit-row";
+      var editBtn = document.createElement("button");
+      editBtn.type = "button"; editBtn.className = "text-btn"; editBtn.textContent = "Editar";
+      editBtn.addEventListener("click", function(){ openDialog(pill); });
+      var delBtn = document.createElement("button");
+      delBtn.type = "button"; delBtn.className = "text-btn danger"; delBtn.textContent = "Remover";
+      delBtn.addEventListener("click", function(){ openConfirmDelete(pill); });
+      editRow.appendChild(editBtn);
+      var icsBtn = document.createElement("button");
+      icsBtn.type = "button"; icsBtn.className = "text-btn"; icsBtn.textContent = "+ Alarme no calendário";
+      icsBtn.addEventListener("click", function(){ downloadIcs(pill); });
+      editRow.appendChild(icsBtn);
+      editRow.appendChild(delBtn);
+      meta.appendChild(editRow);
+
+      if(taken){
+        var proofRow = document.createElement("div");
+        proofRow.className = "proof-row";
+        var entry = todayLog[pill.id];
+        if(entry && entry.photo){
+          var thumb = document.createElement("img");
+          thumb.className = "proof-thumb";
+          thumb.src = entry.photo;
+          thumb.alt = "Foto de prova de " + pill.name;
+          thumb.addEventListener("click", function(src){
+            return function(){ openLightbox(src); };
+          }(entry.photo));
+          proofRow.appendChild(thumb);
+          var retakeBtn = document.createElement("button");
+          retakeBtn.type = "button"; retakeBtn.className = "text-btn";
+          retakeBtn.textContent = "Trocar foto";
+          retakeBtn.addEventListener("click", function(id){
+            return function(){ photoTargetPillId = id; photoInput.click(); };
+          }(pill.id));
+          proofRow.appendChild(retakeBtn);
+        }else{
+          var placeholder = document.createElement("div");
+          placeholder.className = "proof-missing";
+          proofRow.appendChild(placeholder);
+          var addPhotoBtn = document.createElement("button");
+          addPhotoBtn.type = "button"; addPhotoBtn.className = "text-btn";
+          addPhotoBtn.textContent = "+ Adicionar foto de prova";
+          addPhotoBtn.addEventListener("click", function(id){
+            return function(){ photoTargetPillId = id; photoInput.click(); };
+          }(pill.id));
+          proofRow.appendChild(addPhotoBtn);
+        }
+        meta.appendChild(proofRow);
+      }
+
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "toggle-btn " + (taken ? "taken" : "pending");
+      btn.innerHTML = taken ? (checkSvg + "Tomado") : "Marcar tomado";
+      btn.addEventListener("click", function(){
+        if(!state.log[key]) state.log[key] = {};
+        if(taken){
+          delete state.log[key][pill.id];
+        }else{
+          var now = new Date();
+          state.log[key][pill.id] = { at: now.toTimeString().slice(0,5) };
+          var logToday = state.log[key];
+          var nowAllTaken = pills.length > 0 && pills.every(function(p){ return !!logToday[p.id]; });
+          if(nowAllTaken) celebrate();
+        }
+        save(); renderAll();
+      });
+
+      card.appendChild(meta);
+      card.appendChild(btn);
+      list.appendChild(card);
+    });
+  }
+
+  // ---- monthly calendar ----
+  var calCursor = new Date(); calCursor.setDate(1); calCursor.setHours(0,0,0,0);
+  var monthFmt = new Intl.DateTimeFormat("pt-PT", { month: "long", year: "numeric" });
+  var dowLabels = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"];
+
+  function dayStatus(key, todayK){
+    var pills = pillsOnDay(key);
+    if(pills.length === 0) return { cls: "empty-day", pills: pills };
+    var dayLog = state.log[key] || {};
+    var takenCount = pills.filter(function(p){ return !!dayLog[p.id]; }).length;
+    if(key > todayK) return { cls: "future", pills: pills };
+    if(key === todayK){
+      return { cls: takenCount === pills.length ? "complete" : "in-progress", pills: pills };
+    }
+    if(takenCount === pills.length) return { cls: "complete", pills: pills };
+    if(takenCount === 0) return { cls: "missed", pills: pills };
+    return { cls: "partial", pills: pills };
+  }
+
+  function renderCalendar(){
+    var section = document.getElementById("history-section");
+    if(state.pills.length === 0){ section.hidden = true; return; }
+    section.hidden = false;
+
+    document.getElementById("cal-month").textContent = monthFmt.format(calCursor);
+
+    var grid = document.getElementById("cal-grid");
+    grid.innerHTML = "";
+    dowLabels.forEach(function(l){
+      var d = document.createElement("div");
+      d.className = "cal-dow"; d.textContent = l;
+      grid.appendChild(d);
+    });
+
+    var year = calCursor.getFullYear(), month = calCursor.getMonth();
+    var firstOfMonth = new Date(year, month, 1);
+    var startWeekday = (firstOfMonth.getDay() + 6) % 7; // Monday = 0
+    var daysInMonth = new Date(year, month + 1, 0).getDate();
+    var todayK = todayKey();
+
+    for(var i = 0; i < startWeekday; i++){
+      var pad = document.createElement("div");
+      pad.className = "cal-cell pad";
+      grid.appendChild(pad);
+    }
+
+    for(var day = 1; day <= daysInMonth; day++){
+      var cellDate = new Date(year, month, day);
+      var key = todayKey(cellDate);
+      var info = dayStatus(key, todayK);
+      var cell = document.createElement("button");
+      cell.type = "button";
+      cell.className = "cal-cell " + info.cls + (key === todayK ? " is-today" : "");
+      cell.textContent = String(day);
+      if(info.cls === "future" || info.cls === "empty-day"){
+        cell.disabled = true;
+      }else{
+        cell.addEventListener("click", function(k){
+          return function(){ openDayDetail(k); };
+        }(key));
+      }
+      grid.appendChild(cell);
+    }
+  }
+
+  document.getElementById("cal-prev").addEventListener("click", function(){
+    calCursor.setMonth(calCursor.getMonth() - 1);
+    renderCalendar();
+  });
+  document.getElementById("cal-next").addEventListener("click", function(){
+    calCursor.setMonth(calCursor.getMonth() + 1);
+    renderCalendar();
+  });
+
+  var dayDialog = document.getElementById("day-dialog");
+  var dayDialogTitle = document.getElementById("day-dialog-title");
+  var dayDetailList = document.getElementById("day-detail-list");
+  var dayFullFmt = new Intl.DateTimeFormat("pt-PT", { weekday: "long", day: "numeric", month: "long" });
+
+  function openDayDetail(key){
+    var pills = pillsOnDay(key);
+    var dayLog = state.log[key] || {};
+    dayDialogTitle.textContent = dayFullFmt.format(keyToDate(key));
+    dayDetailList.innerHTML = "";
+    pills.forEach(function(pill){
+      var entry = dayLog[pill.id];
+      var row = document.createElement("div");
+      row.className = "ddrow";
+      var name = document.createElement("span");
+      name.className = "ddname"; name.textContent = pill.name + (pill.deleted ? " (removido)" : "");
+      row.appendChild(name);
+      if(entry && entry.photo){
+        var thumb = document.createElement("img");
+        thumb.className = "ddthumb"; thumb.src = entry.photo; thumb.alt = "Foto de prova";
+        thumb.addEventListener("click", function(src){ return function(){ openLightbox(src); }; }(entry.photo));
+        row.appendChild(thumb);
+      }
+      var status = document.createElement("span");
+      status.className = "ddstatus " + (entry ? "taken" : "missed");
+      status.textContent = entry ? ("Tomado" + (entry.at ? " · " + entry.at : "")) : "Não tomado";
+      row.appendChild(status);
+      dayDetailList.appendChild(row);
+    });
+    if(typeof dayDialog.showModal === "function") dayDialog.showModal();
+    else dayDialog.setAttribute("open","");
+  }
+  document.getElementById("day-close").addEventListener("click", function(){
+    if(typeof dayDialog.close === "function") dayDialog.close();
+    else dayDialog.removeAttribute("open");
+  });
+
+  function renderAll(){ renderToday(); renderCalendar(); renderBanner(); }
+
+  // ---- add / edit pill dialog ----
+  var dialog = document.getElementById("pill-dialog");
+  var form = document.getElementById("pill-form");
+  var nameInput = document.getElementById("pill-name");
+  var timeInput = document.getElementById("pill-time");
+  var dialogTitle = document.getElementById("dialog-title");
+  var editingId = null;
+
+  var reminderOn = document.getElementById("reminder-on");
+  var reminderFields = document.getElementById("reminder-fields");
+  var reminderTime = document.getElementById("reminder-time");
+  var reminderHint = document.getElementById("reminder-hint");
+
+  function notifSupported(){ return typeof Notification !== "undefined"; }
+  function updateReminderHint(){
+    var msg = "O aviso aparece dentro da app enquanto estiver aberta.";
+    if(notifSupported()){
+      if(Notification.permission === "granted") msg = "Notificações ativas: o telemóvel avisa enquanto a app estiver aberta. Para avisos com a app fechada, usa o botão Calendário no cartão.";
+      else if(Notification.permission === "denied") msg = "Notificações bloqueadas no navegador. O aviso aparece dentro da app; para avisos com a app fechada, usa o botão Calendário no cartão.";
+      else msg = "Vamos pedir permissão para notificações. Para avisos com a app fechada, usa o botão Calendário no cartão.";
+    }
+    reminderHint.textContent = msg;
+  }
+  reminderOn.addEventListener("change", function(){
+    reminderFields.hidden = !reminderOn.checked;
+    if(reminderOn.checked){
+      if(!reminderTime.value) reminderTime.value = timeInput.value || "08:00";
+      if(notifSupported() && Notification.permission === "default"){
+        try{
+          var res = Notification.requestPermission();
+          if(res && res.then) res.then(updateReminderHint);
+        }catch(e){}
+      }
+      updateReminderHint();
+    }
+  });
+
+  function openDialog(pill){
+    editingId = pill ? pill.id : null;
+    dialogTitle.textContent = pill ? "Editar comprimido" : "Adicionar comprimido";
+    nameInput.value = pill ? pill.name : "";
+    timeInput.value = pill ? pill.time : "08:00";
+    var r = pill && pill.reminder;
+    reminderOn.checked = !!(r && r.enabled);
+    reminderTime.value = (r && r.time) || (pill ? pill.time : "08:00");
+    reminderFields.hidden = !reminderOn.checked;
+    updateReminderHint();
+    if(typeof dialog.showModal === "function"){
+      dialog.showModal();
+    }else{
+      dialog.setAttribute("open","");
+    }
+    setTimeout(function(){ nameInput.focus(); }, 50);
+  }
+  function closeDialog(){
+    if(typeof dialog.close === "function") dialog.close();
+    else dialog.removeAttribute("open");
+  }
+
+  document.getElementById("open-add").addEventListener("click", function(){ openDialog(null); });
+  document.getElementById("cancel-btn").addEventListener("click", function(e){ e.preventDefault(); closeDialog(); });
+
+  form.addEventListener("submit", function(e){
+    e.preventDefault();
+    var name = nameInput.value.trim();
+    var time = timeInput.value;
+    if(!name || !time){ closeDialog(); return; }
+    var reminder = { enabled: reminderOn.checked, time: reminderTime.value || time };
+    if(editingId){
+      var p = state.pills.find(function(p){ return p.id === editingId; });
+      if(p){ p.name = name; p.time = time; p.reminder = reminder; }
+    }else{
+      state.pills.push({ id: uid(), name: name, time: time, createdAt: todayKey(), deleted: false, reminder: reminder });
+    }
+    save();
+    closeDialog();
+    renderAll();
+    checkReminders();
+  });
+
+  // ---- confirm delete dialog (soft delete — history is kept) ----
+  var confirmDialog = document.getElementById("confirm-dialog");
+  var confirmMsg = document.getElementById("confirm-msg");
+  var pendingDeleteId = null;
+
+  function openConfirmDelete(pill){
+    pendingDeleteId = pill.id;
+    confirmMsg.textContent = "Tens a certeza que queres remover \"" + pill.name + "\"? O histórico já registado mantém-se.";
+    if(typeof confirmDialog.showModal === "function") confirmDialog.showModal();
+    else confirmDialog.setAttribute("open","");
+  }
+  function closeConfirmDelete(){
+    pendingDeleteId = null;
+    if(typeof confirmDialog.close === "function") confirmDialog.close();
+    else confirmDialog.removeAttribute("open");
+  }
+  document.getElementById("confirm-cancel").addEventListener("click", closeConfirmDelete);
+  document.getElementById("confirm-ok").addEventListener("click", function(){
+    if(pendingDeleteId){
+      var p = state.pills.find(function(p){ return p.id === pendingDeleteId; });
+      if(p){ p.deleted = true; p.deletedAt = todayKey(); }
+      save();
+    }
+    closeConfirmDelete();
+    renderAll();
+  });
+
+  // ---- per-pill reminders ----
+  // Browsers can only notify while the page is open (no server to push from),
+  // so each reminder also shows an in-app banner, and the calendar export
+  // gives a daily alarm that works even when the app is closed.
+  var bannerPillIds = [];
+  var bannerEl = document.getElementById("reminder-banner");
+  var bannerText = document.getElementById("reminder-text");
+  document.getElementById("reminder-dismiss").addEventListener("click", function(){
+    bannerPillIds = []; renderBanner();
+  });
+
+  function toMinutes(hhmm){
+    var p = (hhmm || "00:00").split(":");
+    return parseInt(p[0],10) * 60 + parseInt(p[1],10);
+  }
+  function renderBanner(){
+    var todayLog = state.log[todayKey()] || {};
+    bannerPillIds = bannerPillIds.filter(function(id){ return !todayLog[id]; });
+    var names = bannerPillIds.map(function(id){
+      var p = state.pills.find(function(p){ return p.id === id; });
+      return p ? p.name : "";
+    }).filter(Boolean);
+    if(names.length === 0){ bannerEl.hidden = true; return; }
+    bannerText.textContent = "Hora de tomar: " + names.join(", ");
+    bannerEl.hidden = false;
+  }
+  function fireReminder(pill){
+    if(bannerPillIds.indexOf(pill.id) === -1) bannerPillIds.push(pill.id);
+    renderBanner();
+    if(notifSupported() && Notification.permission === "granted"){
+      try{
+        new Notification("Hora de tomar " + pill.name, { body: "Comprimidos da Joca", tag: "pill-" + pill.id });
+      }catch(e){ /* some mobile browsers only allow service-worker notifications */ }
+    }
+  }
+  function checkReminders(){
+    var key = todayKey();
+    var log = state.log[key] || {};
+    var fired = (state.fired && state.fired[key]) || {};
+    var nowMin = toMinutes(new Date().toTimeString().slice(0,5));
+    activePills().forEach(function(p){
+      var r = p.reminder;
+      if(!r || !r.enabled || log[p.id] || fired[p.id]) return;
+      var rm = toMinutes(r.time || p.time);
+      // fire once per day, up to an hour late (so opening the app much later doesn't pop old alerts)
+      if(nowMin >= rm && nowMin - rm <= 60){
+        fired[p.id] = true;
+        state.fired = {}; state.fired[key] = fired;
+        save();
+        fireReminder(p);
+      }
+    });
+    renderBanner();
+  }
+  setInterval(checkReminders, 15000);
+
+  function icsEscape(s){ return String(s).replace(/[\\;,]/g, "\\$&").replace(/\n/g, "\\n"); }
+  function icsStamp(d){
+    function z(n){ return String(n).padStart(2,"0"); }
+    return d.getFullYear() + z(d.getMonth()+1) + z(d.getDate()) + "T" + z(d.getHours()) + z(d.getMinutes()) + "00";
+  }
+  // builds one daily-recurring VEVENT (with a same-time VALARM) for a pill —
+  // this is what makes the phone's own calendar app ring an alarm every day,
+  // independent of this page being open
+  function buildIcsEvent(pill){
+    var t = (pill.reminder && pill.reminder.time) || pill.time;
+    var parts = t.split(":");
+    var start = new Date(); start.setHours(parseInt(parts[0],10), parseInt(parts[1],10), 0, 0);
+    if(start < new Date()) start.setDate(start.getDate() + 1);
+    var end = new Date(start.getTime() + 5 * 60000);
+    return [
+      "BEGIN:VEVENT",
+      "UID:" + pill.id + "@comprimidos-da-joca",
+      "DTSTAMP:" + icsStamp(new Date()),
+      "DTSTART:" + icsStamp(start),
+      "DTEND:" + icsStamp(end),
+      "RRULE:FREQ=DAILY",
+      "SUMMARY:" + icsEscape("Tomar " + pill.name),
+      "BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:" + icsEscape("Tomar " + pill.name),"TRIGGER:PT0S","END:VALARM",
+      "END:VEVENT"
+    ];
+  }
+  function saveIcsFile(eventLines, filename){
+    var lines = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Comprimidos da Joca//PT","CALSCALE:GREGORIAN"]
+      .concat(eventLines).concat(["END:VCALENDAR"]);
+    try{
+      var blob = new Blob([lines.join("\r\n")], { type: "text/calendar" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
+    }catch(e){}
+  }
+  function downloadIcs(pill){
+    saveIcsFile(buildIcsEvent(pill), "lembrete-" + pill.name.replace(/[^\w-]+/g,"_") + ".ics");
+  }
+  function downloadIcsAll(){
+    var pills = activePills();
+    if(pills.length === 0) return;
+    var all = [];
+    pills.forEach(function(p){ all = all.concat(buildIcsEvent(p)); });
+    saveIcsFile(all, "comprimidos-da-joca.ics");
+  }
+  document.getElementById("add-all-calendar").addEventListener("click", downloadIcsAll);
+
+  // ---- header date + midnight rollover ----
+  var todayLabel = document.getElementById("today-label");
+  var fullDateFmt = new Intl.DateTimeFormat("pt-PT", { weekday: "long", day: "numeric", month: "long" });
+  var currentDayKey = todayKey();
+
+  function updateDateHeader(){
+    todayLabel.textContent = fullDateFmt.format(new Date());
+  }
+  function checkRollover(){
+    var k = todayKey();
+    if(k !== currentDayKey){
+      currentDayKey = k;
+      updateDateHeader();
+      renderAll();
+    }
+  }
+  setInterval(checkRollover, 30000);
+  document.addEventListener("visibilitychange", function(){
+    if(!document.hidden){ checkRollover(); checkReminders(); }
+  });
+
+  applyTheme();
+  updateDateHeader();
+  load();
+  renderAll();
+  checkReminders();
+})();
+</script>
+
+</body>
+</html>
